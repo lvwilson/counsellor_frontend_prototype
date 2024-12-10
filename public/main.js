@@ -37,9 +37,7 @@ class ChatInterface {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    conversation_id: null  // Allow the server to generate one
-                })
+                body: JSON.stringify({})  // Let the server generate the ID
             });
 
             if (!response.ok) {
