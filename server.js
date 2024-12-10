@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const cors = require('cors');
 const morgan = require('morgan');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = 3000;
@@ -35,6 +36,13 @@ app.use((req, res, next) => {
 
 // API proxy middleware
 const apiProxy = (targetPath) => async (req, res) => {
+    // Special handling for create_conversation
+    if (targetPath === '/create_conversation') {
+        req.body = {
+            conversation_id: uuidv4().toString() // Generate and convert UUID to string
+        };
+    }
+
     const requestBody = JSON.stringify(req.body || {});
     console.log(`Sending request body to API:`, requestBody);
 
@@ -107,15 +115,8 @@ const apiProxy = (targetPath) => async (req, res) => {
             });
         });
 
-        // Write request body if it exists
-        if (requestBody && requestBody !== '{}') {
-            console.log('Writing request body to API:', requestBody);
-            proxyReq.write(requestBody);
-        } else {
-            console.log('No request body to send');
-            proxyReq.write('{}'); // Send empty object for POST requests
-        }
-        
+        // Write request body
+        proxyReq.write(requestBody);
         proxyReq.end();
 
     } catch (error) {
@@ -157,12 +158,10 @@ const server = http.createServer(app);
 // Error handling for uncaught exceptions
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
-    // Attempt to close server gracefully
     server.close(() => {
         console.log('Server closed due to uncaught exception');
         process.exit(1);
     });
-    // If server hasn't closed in 5 seconds, force exit
     setTimeout(() => {
         console.error('Forced server shutdown');
         process.exit(1);
@@ -171,12 +170,10 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (err) => {
     console.error('Unhandled Rejection:', err);
-    // Attempt to close server gracefully
     server.close(() => {
         console.log('Server closed due to unhandled rejection');
         process.exit(1);
     });
-    // If server hasn't closed in 5 seconds, force exit
     setTimeout(() => {
         console.error('Forced server shutdown');
         process.exit(1);
