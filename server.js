@@ -7,6 +7,13 @@ const morgan = require('morgan');
 const app = express();
 const port = 3000;
 
+// API Configuration
+const API_CONFIG = {
+    hostname: 'localhost',
+    port: 5000,  // Confirm this is the correct port for the counsellor API
+    protocol: 'http'
+};
+
 // Add morgan for request logging
 app.use(morgan('dev'));
 
@@ -28,18 +35,23 @@ app.use((req, res, next) => {
 
 // API proxy middleware
 const apiProxy = (targetPath) => async (req, res) => {
+    const requestBody = req.body && Object.keys(req.body).length > 0 ? JSON.stringify(req.body) : '';
+    
     const options = {
-        hostname: 'localhost',
-        port: 5000, // Assuming the counsellor API is running on port 5000
-        path: targetPath,
+        hostname: API_CONFIG.hostname,
+        port: API_CONFIG.port,
+        path: targetPath + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''),
         method: req.method,
         headers: {
             'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(requestBody),
+            'Accept': 'application/json'
         },
     };
 
     try {
-        console.log(`[${new Date().toISOString()}] Proxying request to: ${targetPath}`);
+        console.log(`[${new Date().toISOString()}] Proxying request to: ${API_CONFIG.protocol}://${API_CONFIG.hostname}:${API_CONFIG.port}${targetPath}`);
+        console.log('Request options:', JSON.stringify(options, null, 2));
         
         const proxyReq = http.request(options, (proxyRes) => {
             let data = '';
@@ -50,28 +62,57 @@ const apiProxy = (targetPath) => async (req, res) => {
             
             proxyRes.on('end', () => {
                 try {
-                    console.log(`[${new Date().toISOString()}] API Response:`, data);
-                    res.status(proxyRes.statusCode).json(JSON.parse(data));
+                    console.log(`[${new Date().toISOString()}] API Response Status:`, proxyRes.statusCode);
+                    console.log(`[${new Date().toISOString()}] API Response Headers:`, proxyRes.headers);
+                    console.log(`[${new Date().toISOString()}] API Response Body:`, data);
+
+                    // Check if response is JSON
+                    if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('application/json')) {
+                        res.status(proxyRes.statusCode).json(JSON.parse(data));
+                    } else {
+                        // Handle non-JSON response
+                        console.error('Received non-JSON response from API');
+                        res.status(502).json({
+                            error: 'Bad Gateway',
+                            message: 'Received invalid response from API server',
+                            details: data.substring(0, 200) // Include first 200 chars of response for debugging
+                        });
+                    }
                 } catch (error) {
-                    console.error('Error parsing API response:', error);
-                    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+                    console.error('Error handling API response:', error);
+                    res.status(502).json({
+                        error: 'Bad Gateway',
+                        message: 'Failed to process API response',
+                        details: error.message
+                    });
                 }
             });
         });
 
         proxyReq.on('error', (error) => {
             console.error('Proxy request error:', error);
-            res.status(500).json({ error: 'Failed to reach API server', details: error.message });
+            res.status(503).json({
+                error: 'Service Unavailable',
+                message: 'Failed to reach API server',
+                details: error.message
+            });
         });
 
-        if (req.body && Object.keys(req.body).length > 0) {
-            proxyReq.write(JSON.stringify(req.body));
+        // Write request body if it exists
+        if (requestBody) {
+            console.log('Sending request body:', requestBody);
+            proxyReq.write(requestBody);
         }
+        
         proxyReq.end();
 
     } catch (error) {
         console.error('Proxy middleware error:', error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(500).json({
+            error: 'Internal Server Error',
+            message: 'Failed to process request',
+            details: error.message
+        });
     }
 };
 
@@ -132,6 +173,7 @@ process.on('unhandledRejection', (err) => {
 
 // Start server
 server.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+    console.log(`Frontend server running at http://localhost:${port}`);
+    console.log(`Proxying requests to ${API_CONFIG.protocol}://${API_CONFIG.hostname}:${API_CONFIG.port}`);
     console.log('Environment:', process.env.NODE_ENV || 'development');
 });
