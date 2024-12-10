@@ -3,6 +3,7 @@ class ChatInterface {
         this.conversationId = null;
         this.userId = 'user-' + Math.random().toString(36).substr(2, 9);
         this.userName = 'User';
+        this.isProcessing = false;
         this.initialize();
     }
 
@@ -30,14 +31,29 @@ class ChatInterface {
         this.createNewSession();
     }
 
+    setProcessing(isProcessing) {
+        this.isProcessing = isProcessing;
+        this.sendButton.disabled = isProcessing;
+        this.newSessionButton.disabled = isProcessing;
+        this.generateReportButton.disabled = isProcessing;
+        
+        // Update button text to show loading state
+        if (isProcessing) {
+            this.sendButton.innerHTML = '<div class="loading"></div>';
+        } else {
+            this.sendButton.textContent = 'Send';
+        }
+    }
+
     async createNewSession() {
         try {
+            this.setProcessing(true);
             const response = await fetch('/create_conversation', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({})  // Let the server generate the ID
+                body: JSON.stringify({})
             });
 
             if (!response.ok) {
@@ -61,14 +77,20 @@ class ChatInterface {
             console.error('Failed to create new session:', error);
             this.showError('Failed to create new session: ' + error.message);
             throw error;
+        } finally {
+            this.setProcessing(false);
         }
     }
 
     async sendMessage() {
+        if (this.isProcessing) return;
+        
         const content = this.messageInput.value.trim();
         if (!content) return;
 
         try {
+            this.setProcessing(true);
+            
             // Add user message to UI immediately
             this.addMessage({
                 author_name: this.userName,
@@ -104,6 +126,8 @@ class ChatInterface {
             console.error('Failed to send message:', error);
             this.showError('Failed to send message: ' + error.message);
             throw error;
+        } finally {
+            this.setProcessing(false);
         }
     }
 
@@ -138,7 +162,10 @@ class ChatInterface {
     }
 
     async generateReport() {
+        if (this.isProcessing) return;
+        
         try {
+            this.setProcessing(true);
             const response = await fetch('/generate_report', {
                 method: 'POST',
                 headers: {
@@ -160,6 +187,8 @@ class ChatInterface {
             console.error('Failed to generate report:', error);
             this.showError('Failed to generate report: ' + error.message);
             throw error;
+        } finally {
+            this.setProcessing(false);
         }
     }
 
@@ -169,7 +198,7 @@ class ChatInterface {
         
         const metaElement = document.createElement('div');
         metaElement.className = 'message-meta';
-        metaElement.textContent = message.author_name;
+        metaElement.textContent = `${message.author_name} • ${new Date().toLocaleTimeString()}`;
         
         const contentElement = document.createElement('div');
         contentElement.className = 'message-content';
