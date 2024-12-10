@@ -81,10 +81,16 @@ textarea {
     border-radius: 5px;
     cursor: pointer;
     font-size: 14px;
+    transition: background-color 0.3s ease;
 }
 
 .button:hover {
     background-color: #1976d2;
+}
+
+.button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
 }
 
 .sidebar {
@@ -112,8 +118,37 @@ textarea {
 .error-message {
     background-color: #ffebee;
     color: #c62828;
-    padding: 10px;
+    padding: 15px;
     margin: 10px 0;
     border-radius: 5px;
-    display: none;
+    border-left: 4px solid #c62828;
+    font-weight: bold;
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-radius: 50%;
+    border-top: 3px solid #2196f3;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }

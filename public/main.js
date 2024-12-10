@@ -37,12 +37,18 @@ class ChatInterface {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({}),
+                body: JSON.stringify({
+                    conversation_id: null  // Allow the server to generate one
+                })
             });
 
-            if (!response.ok) throw new Error('Failed to create conversation');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create conversation');
+            }
 
             const data = await response.json();
+            console.log('Created new conversation:', data);
             this.conversationId = data.conversation_id;
             this.chatMessages.innerHTML = '';
             this.reportContent.innerHTML = '';
@@ -54,6 +60,7 @@ class ChatInterface {
                 author_id: 'counsellor',
             });
         } catch (error) {
+            console.error('Failed to create new session:', error);
             this.showError('Failed to create new session: ' + error.message);
             throw error;
         }
@@ -88,11 +95,15 @@ class ChatInterface {
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to send message');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to send message');
+            }
 
             // Generate counsellor response
             await this.generateCounsellorResponse();
         } catch (error) {
+            console.error('Failed to send message:', error);
             this.showError('Failed to send message: ' + error.message);
             throw error;
         }
@@ -110,7 +121,10 @@ class ChatInterface {
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to generate response');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to generate response');
+            }
 
             const data = await response.json();
             this.addMessage({
@@ -119,6 +133,7 @@ class ChatInterface {
                 author_id: 'counsellor',
             });
         } catch (error) {
+            console.error('Failed to generate counsellor response:', error);
             this.showError('Failed to generate counsellor response: ' + error.message);
             throw error;
         }
@@ -136,11 +151,15 @@ class ChatInterface {
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to generate report');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to generate report');
+            }
 
             const data = await response.json();
             this.reportContent.textContent = data.response;
         } catch (error) {
+            console.error('Failed to generate report:', error);
             this.showError('Failed to generate report: ' + error.message);
             throw error;
         }
@@ -166,11 +185,12 @@ class ChatInterface {
     }
 
     showError(message) {
+        console.error(message);
         const errorDiv = document.createElement('div');
         errorDiv.className = 'error-message';
         errorDiv.textContent = message;
-        this.chatMessages.appendChild(errorDiv);
         errorDiv.style.display = 'block';
+        this.chatMessages.appendChild(errorDiv);
         setTimeout(() => {
             errorDiv.remove();
         }, 5000);
