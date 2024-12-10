@@ -10,7 +10,7 @@ const port = 3000;
 // API Configuration
 const API_CONFIG = {
     hostname: 'localhost',
-    port: 5000,  // Confirm this is the correct port for the counsellor API
+    port: 5000,
     protocol: 'http'
 };
 
@@ -20,9 +20,9 @@ app.use(morgan('dev'));
 // Add CORS support
 app.use(cors());
 
-// Body parsing middleware
+// Body parsing middleware with larger size limit
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
-app.use(express.json());
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -35,8 +35,9 @@ app.use((req, res, next) => {
 
 // API proxy middleware
 const apiProxy = (targetPath) => async (req, res) => {
-    const requestBody = req.body && Object.keys(req.body).length > 0 ? JSON.stringify(req.body) : '';
-    
+    const requestBody = JSON.stringify(req.body || {});
+    console.log(`Sending request body to API:`, requestBody);
+
     const options = {
         hostname: API_CONFIG.hostname,
         port: API_CONFIG.port,
@@ -70,11 +71,19 @@ const apiProxy = (targetPath) => async (req, res) => {
                     if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('application/json')) {
                         res.status(proxyRes.statusCode).json(JSON.parse(data));
                     } else {
-                        // Handle non-JSON response
-                        console.error('Received non-JSON response from API');
+                        // Try to extract error message from HTML response
+                        let errorMessage = 'Unknown error occurred';
+                        if (data.includes('<p>')) {
+                            const match = data.match(/<p>(.*?)<\/p>/);
+                            if (match) {
+                                errorMessage = match[1];
+                            }
+                        }
+                        
+                        console.error('Received non-JSON response from API:', errorMessage);
                         res.status(502).json({
                             error: 'Bad Gateway',
-                            message: 'Received invalid response from API server',
+                            message: errorMessage,
                             details: data.substring(0, 200) // Include first 200 chars of response for debugging
                         });
                     }
@@ -99,9 +108,12 @@ const apiProxy = (targetPath) => async (req, res) => {
         });
 
         // Write request body if it exists
-        if (requestBody) {
-            console.log('Sending request body:', requestBody);
+        if (requestBody && requestBody !== '{}') {
+            console.log('Writing request body to API:', requestBody);
             proxyReq.write(requestBody);
+        } else {
+            console.log('No request body to send');
+            proxyReq.write('{}'); // Send empty object for POST requests
         }
         
         proxyReq.end();
