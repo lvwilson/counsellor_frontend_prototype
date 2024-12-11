@@ -6,13 +6,20 @@ const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const port = 3000;
+const port = 8080;
+
+// API Configuration
+// const API_CONFIG = {
+//     hostname: 'localhost',
+//     port: 5000,
+//     protocol: 'http'
+// };
 
 // API Configuration
 const API_CONFIG = {
-    hostname: 'localhost',
-    port: 5000,
-    protocol: 'http'
+    hostname: 'flask-app-961406695757.asia-northeast1.run.app',
+    port: null, // HTTPSでは通常ポート番号は不要
+    protocol: 'https'
 };
 
 // Add morgan for request logging
@@ -34,12 +41,107 @@ app.use((req, res, next) => {
     next();
 });
 
+// // API proxy middleware
+// const apiProxy = (targetPath) => async (req, res) => {
+//     // Special handling for create_conversation
+//     if (targetPath === '/create_conversation') {
+//         req.body = {
+//             conversation_id: uuidv4().toString() // Generate and convert UUID to string
+//         };
+//     }
+
+//     const requestBody = JSON.stringify(req.body || {});
+//     console.log(`Sending request body to API:`, requestBody);
+
+//     const options = {
+//         hostname: API_CONFIG.hostname,
+//         port: API_CONFIG.port,
+//         path: targetPath + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''),
+//         method: req.method,
+//         headers: {
+//             'Content-Type': 'application/json',
+//             'Content-Length': Buffer.byteLength(requestBody),
+//             'Accept': 'application/json'
+//         },
+//     };
+
+//     try {
+//         console.log(`[${new Date().toISOString()}] Proxying request to: ${API_CONFIG.protocol}://${API_CONFIG.hostname}:${API_CONFIG.port}${targetPath}`);
+//         console.log('Request options:', JSON.stringify(options, null, 2));
+        
+//         const proxyReq = http.request(options, (proxyRes) => {
+//             let data = '';
+            
+//             proxyRes.on('data', (chunk) => {
+//                 data += chunk;
+//             });
+            
+//             proxyRes.on('end', () => {
+//                 try {
+//                     console.log(`[${new Date().toISOString()}] API Response Status:`, proxyRes.statusCode);
+//                     console.log(`[${new Date().toISOString()}] API Response Headers:`, proxyRes.headers);
+//                     console.log(`[${new Date().toISOString()}] API Response Body:`, data);
+
+//                     // Check if response is JSON
+//                     if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('application/json')) {
+//                         res.status(proxyRes.statusCode).json(JSON.parse(data));
+//                     } else {
+//                         // Try to extract error message from HTML response
+//                         let errorMessage = 'Unknown error occurred';
+//                         if (data.includes('<p>')) {
+//                             const match = data.match(/<p>(.*?)<\/p>/);
+//                             if (match) {
+//                                 errorMessage = match[1];
+//                             }
+//                         }
+                        
+//                         console.error('Received non-JSON response from API:', errorMessage);
+//                         res.status(502).json({
+//                             error: 'Bad Gateway',
+//                             message: errorMessage,
+//                             details: data.substring(0, 200) // Include first 200 chars of response for debugging
+//                         });
+//                     }
+//                 } catch (error) {
+//                     console.error('Error handling API response:', error);
+//                     res.status(502).json({
+//                         error: 'Bad Gateway',
+//                         message: 'Failed to process API response',
+//                         details: error.message
+//                     });
+//                 }
+//             });
+//         });
+
+//         proxyReq.on('error', (error) => {
+//             console.error('Proxy request error:', error);
+//             res.status(503).json({
+//                 error: 'Service Unavailable',
+//                 message: 'Failed to reach API server',
+//                 details: error.message
+//             });
+//         });
+
+//         // Write request body
+//         proxyReq.write(requestBody);
+//         proxyReq.end();
+
+//     } catch (error) {
+//         console.error('Proxy middleware error:', error);
+//         res.status(500).json({
+//             error: 'Internal Server Error',
+//             message: 'Failed to process request',
+//             details: error.message
+//         });
+//     }
+// };
+
+
 // API proxy middleware
 const apiProxy = (targetPath) => async (req, res) => {
-    // Special handling for create_conversation
     if (targetPath === '/create_conversation') {
         req.body = {
-            conversation_id: uuidv4().toString() // Generate and convert UUID to string
+            conversation_id: uuidv4().toString()
         };
     }
 
@@ -48,7 +150,7 @@ const apiProxy = (targetPath) => async (req, res) => {
 
     const options = {
         hostname: API_CONFIG.hostname,
-        port: API_CONFIG.port,
+        port: API_CONFIG.port, // nullの場合はHTTPSのデフォルトポート443が使用されます
         path: targetPath + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''),
         method: req.method,
         headers: {
@@ -59,10 +161,12 @@ const apiProxy = (targetPath) => async (req, res) => {
     };
 
     try {
-        console.log(`[${new Date().toISOString()}] Proxying request to: ${API_CONFIG.protocol}://${API_CONFIG.hostname}:${API_CONFIG.port}${targetPath}`);
+        console.log(`[${new Date().toISOString()}] Proxying request to: ${API_CONFIG.protocol}://${API_CONFIG.hostname}${targetPath}`);
         console.log('Request options:', JSON.stringify(options, null, 2));
         
-        const proxyReq = http.request(options, (proxyRes) => {
+        // Use https module for secure requests
+        const https = require('https');
+        const proxyReq = https.request(options, (proxyRes) => {
             let data = '';
             
             proxyRes.on('data', (chunk) => {
@@ -75,11 +179,9 @@ const apiProxy = (targetPath) => async (req, res) => {
                     console.log(`[${new Date().toISOString()}] API Response Headers:`, proxyRes.headers);
                     console.log(`[${new Date().toISOString()}] API Response Body:`, data);
 
-                    // Check if response is JSON
                     if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('application/json')) {
                         res.status(proxyRes.statusCode).json(JSON.parse(data));
                     } else {
-                        // Try to extract error message from HTML response
                         let errorMessage = 'Unknown error occurred';
                         if (data.includes('<p>')) {
                             const match = data.match(/<p>(.*?)<\/p>/);
@@ -92,7 +194,7 @@ const apiProxy = (targetPath) => async (req, res) => {
                         res.status(502).json({
                             error: 'Bad Gateway',
                             message: errorMessage,
-                            details: data.substring(0, 200) // Include first 200 chars of response for debugging
+                            details: data.substring(0, 200)
                         });
                     }
                 } catch (error) {
@@ -115,7 +217,6 @@ const apiProxy = (targetPath) => async (req, res) => {
             });
         });
 
-        // Write request body
         proxyReq.write(requestBody);
         proxyReq.end();
 
@@ -128,6 +229,7 @@ const apiProxy = (targetPath) => async (req, res) => {
         });
     }
 };
+
 
 // API routes
 app.post('/create_conversation', apiProxy('/create_conversation'));
